@@ -271,9 +271,15 @@ def leftClassOf (g : G) : leftClass H where
   val := λ g' => ∃ h : (H : Type), g' = (g : G) * (h : G)
   property := ⟨ g, rfl ⟩
 
+def memOfleftClassOf (g : G) : (leftClassOf H g).val g :=
+⟨ ⟨ one, H.oneMem ⟩, by simp [embedding] ⟩
+
 def rightClassOf (g : G) : rightClass H where
   val := λ g' => ∃ h : (H : Type), g' = (h : G) * (g : G)
   property := ⟨ g, rfl ⟩
+
+def memOfRightClassOf (g : G) : (rightClassOf H g).val g :=
+⟨ ⟨ one, H.oneMem ⟩, by simp [embedding] ⟩
 
 class Normal where
   stable : ∀ (g : G) (h : H), H.p (g * h * g⁻¹)
@@ -320,6 +326,10 @@ Iff.intro
   (λ h => match prop₀ g, h with
     | ⟨ h₀, h₀h ⟩, ⟨ h₁, h₁h ⟩ =>
       c.property.2 ▸ (Exists.intro (h₀ * h₁) <| (Group.assoc _ _ _) ▸ h₀h ▸ h₁h ▸ rfl))
+
+theorem rightClassMemIff (c : rightClass H) (g : (c : Type)) (g' : G) :
+  c.val g' ↔ ∃ h : H, g' = (h : G) * (g : G) :=
+@leftClassMemIff _ _ H.op c g g'
 
 theorem translator {c : leftClass H} (g g' : Subtype c.val) :
   ∃ h : H, g' = (g : G) * (h : G) :=
@@ -387,16 +397,36 @@ theorem rightClassEqIff.lemma₃ (c₁ c₂ : rightClass H) :
 -- TODO : Same thing here
 
 theorem normalIff.lemma₁ :
-  (∀ (g : G) (h : H), H.p (g * h * g⁻¹)) →
+  (∀ (g : G) (h : H), H.p (g * h * g⁻¹)) ↔
   (∀ (g : G) (h : H), ∃ h' : H, g * h = h' * g) :=
 by
-  intro p g h
-  suffices p : ∃ h' : H, g * h * g⁻¹ = h'
-  from match p with
-    | ⟨ h', p ⟩ => ⟨ h', by simp [p.symm] ⟩
-  exact ⟨ ⟨ g * h * g⁻¹, p g h ⟩, rfl ⟩
+  apply Iff.intro
+  focus
+    intro p g h
+    suffices p : ∃ h' : H, g * h * g⁻¹ = h'
+    from match p with
+      | ⟨ h', p ⟩ => ⟨ h', by simp [p.symm] ⟩
+    exact ⟨ ⟨ g * h * g⁻¹, p g h ⟩, rfl ⟩
+  focus
+    intro p g h
+    match p g h with
+    | ⟨ h', p ⟩ =>
+      rw [show g * h * g⁻¹ = h' by simp [p]]
+      simp [embedding, h'.2]
 
 theorem normalIff.lemma₂ :
+  (∀ (g : G) (h : H), ∃ h' : H, g * h = h' * g) →
+  (∀ (g : G) (h : H), ∃ h' : H, g * h' = h * g) :=
+by
+  intro h g h₀
+  match h (g⁻¹) (h₀⁻¹) with
+  | ⟨ h', p ⟩ =>
+    have ∀ k k' : G, k = k' → k⁻¹ = k'⁻¹ by intro _ _ h; rw [h]
+    have p' := this _ _ p
+    simp at p'
+    exact ⟨ h'⁻¹, p'.symm ⟩
+
+theorem normalIff.lemma₃ :
   (∀ (g : G) (h : H), ∃ h' : H, g * h = h' * g) →
   (∀ (g : G) (h : H), ∃ h' : H, g * h' = h * g) →
   ∀ (p : G → Prop), isLeftClass H p → isRightClass H p :=
@@ -413,16 +443,27 @@ by
       | ⟨ k, h'' ⟩ => match h₁ g k with
         | ⟨ k', h''' ⟩ => ⟨ k', h''' ▸ h'' ⟩) ⟩
 
-theorem normalIff.lemma₃ :
+theorem normalIff.lemma₄ :
   (∀ (g : G) (h : H), ∃ h' : H, g * h = h' * g) →
   (∀ (g : G) (h : H), ∃ h' : H, g * h' = h * g) →
   ∀ (p : G → Prop), isRightClass H p → isLeftClass H p :=
 by
   rw [leftClassOnOp, rightClassOnOp]
-  exact λ h₁ h₂ p h => @normalIff.lemma₂ _ _ H.op
+  exact λ h₁ h₂ p h => @normalIff.lemma₃ _ _ H.op
     (λ g h => match h₂ g h with | ⟨ k, h₂ ⟩ => ⟨ k, h₂.symm ⟩)
     (λ g h => match h₁ g h with | ⟨ k, h₁ ⟩ => ⟨ k, h₁.symm ⟩)
     p h
+
+theorem normalIff.lemma₅ :
+  (∀ (p : G → Prop), isRightClass H p ↔ isLeftClass H p) →
+  (∀ (g : G) (h : H), ∃ h' : H, g * h = h' * g) :=
+by
+  intro h g h₀
+  have p := ((leftClassOf H g).property)
+  rw [← h] at p
+  have p₁ := leftClassMemIff _ ⟨ g, memOfleftClassOf H g ⟩ (g * h₀)
+  have p₂ := rightClassMemIff ⟨ (leftClassOf H g).val, p ⟩ ⟨ g, memOfleftClassOf H g ⟩ (g * h₀)
+  exact (p₁.trans p₂).1 ⟨ h₀, rfl ⟩
 
 end Subgroup
 
