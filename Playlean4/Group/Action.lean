@@ -1,7 +1,17 @@
 
+import Playlean4.Group.Basic
+
 namespace Group
 
 open Group
+
+variable (G : Magma) [h : Group G]
+
+local infixl:70 " * " => id' Magma.law G
+@[appUnexpander id'] def normal.UnexpandGMul : Lean.PrettyPrinter.Unexpander
+  | `(id' Magma.law G $x $y) => `($x * $y)
+  | _ => throw ()
+local notation "one" => h.one' -- HACK
 
 section
 
@@ -107,4 +117,4 @@ end Remarkable
 
 end Action
 
-end
+end Group

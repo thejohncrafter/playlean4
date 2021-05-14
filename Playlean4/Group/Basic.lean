@@ -25,8 +25,6 @@ class Group where
   oneNeutralRight : ∀ g : G, g * one' = g
   invertible : ∀ g : G, ∃ g' : G, g * g' = one'
 
-#print Group
-
 end
 
 namespace Group
