@@ -1,19 +1,21 @@
 
+set_option quotPrecheck false
+
 structure Magma where
   carrier : Type
   law : carrier → carrier → carrier
 
 section
 
---local instance (M : Magma) : Mul M.carrier where
---  mul := M.law
-
 variable (G : Magma)
 
 instance CoeCarrier : CoeSort Magma Type where
   coe m := m.carrier
 
-local infixl:70 " * " => G.law
+local infixl:70 " * " => id Magma.law G
+@[appUnexpander id] def unexpandMul : Lean.PrettyPrinter.Unexpander
+  | `(id Magma.law G $x $y) => `($x * $y)
+  | _ => throw ()
 
 class Group where
   one' : G -- Name hack
@@ -21,22 +23,20 @@ class Group where
   oneNeutralRight : ∀ g : G, g * one' = g
   invertible : ∀ g : G, ∃ g' : G, g * g' = one'
 
-def Group.mul {G : Magma} [Group G] : G → G → G := G.law
+#print Group
 
 end
 
---#print Group
-
 namespace Group
-
--- protected local instance (M : Magma) : Mul M.carrier where
---  mul := M.law
 
 section
 
 variable {G : Magma} [h : Group G]
 
-local infixl:70 " * " => G.law
+local infixl:70 " * " => id Magma.law G
+@[appUnexpander id] def unexpandMul : Lean.PrettyPrinter.Unexpander
+  | `(id Magma.law G $x $y) => `($x * $y)
+  | _ => throw ()
 local notation "one" => h.one' -- HACK
 
 theorem inverseComm {g h : G} (inv : g * h = one) : h * g = one :=
@@ -130,8 +130,14 @@ instance : CoeFun (Morphism G H) (fun _ => G → H) where
 
 variable (φ : Morphism G H)
 
-local infixl " * " => G.law
-local infixl " * " => H.law
+local infixl " * " => id Magma.law G
+@[appUnexpander id] def unexpandGMul : Lean.PrettyPrinter.Unexpander
+  | `(id Magma.law G $x $y) => `($x * $y)
+  | _ => throw ()
+local infixl " * " => id Magma.law H
+@[appUnexpander id] def unexpandHMul : Lean.PrettyPrinter.Unexpander
+  | `(id Magma.law H $x $y) => `($x * $y)
+  | _ => throw ()
 local notation "one" => Group.one' -- HACK
 
 @[simp]
@@ -189,7 +195,10 @@ namespace Subgroup
 
 variable {G : Magma} [h : Group G]
 
-local infixl:70 " * " => G.law
+local infixl:70 " * " => id Magma.law G
+@[appUnexpander id] def unexpandGMul : Lean.PrettyPrinter.Unexpander
+  | `(id Magma.law G $x $y) => `($x * $y)
+  | _ => throw ()
 local notation "one" => h.one' -- HACK
 
 def coeMagma (H : Subgroup G) : Magma :=
@@ -288,7 +297,10 @@ end
 
 variable {H : Subgroup G}
 
-local infixl:70 " * " => (H : Magma).law
+local infixl:70 " * " => id Magma.law H
+@[appUnexpander id] def unexpandHMul : Lean.PrettyPrinter.Unexpander
+  | `(id Magma.law H $x $y) => `($x * $y)
+  | _ => throw ()
 
 instance (c : leftClass H) : Inhabited (c : Type) where
   default :=
@@ -471,8 +483,8 @@ namespace Morphism
 
 variable {G H : Magma} [Group G] [Group H] (φ : Morphism G H)
 
-local infixl:70 " * " => G.law
-local infix:70 " * " => H.law
+local infixl:70 " * " => id Magma.law G
+local infix:70 " * " => id Magma.law H
 
 def kernel : Subgroup G := Subgroup.ofInhabitedMulInvStable
   (λ g => φ g = one')
@@ -494,7 +506,10 @@ namespace Group
 
 variable (G : Magma) [Group G]
 
-local infixl:65 " + " => G.law
+local infixl:65 " + " => id Magma.law G
+@[appUnexpander id] def unexpandAdd : Lean.PrettyPrinter.Unexpander
+  | `(id Magma.law G $x $y) => `($x + $y)
+  | _ => throw ()
 
 class Abelian extends Group G where
   commute : ∀ g g' : G, g + g' = g' + g

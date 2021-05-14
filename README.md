@@ -92,7 +92,7 @@ section
 
 variable {G : Magma} [h : Group G]
 
-local infixl:70 " * " => G.law
+local infixl:70 " * " => G.law -- (Actually there's a bit more to do, see below...)
 
 -- Lots of lovely theory ♥
 
@@ -111,6 +111,23 @@ In the current state of the repo, there are some hard truths that come with this
    This will be solved as soon as `nat_lit` will make its way into the release
    channels, but I just have to acknowledge that I have done this to be fair
    with those who will read my code.
+
+#### We need a workaround
+
+There is [an issue](https://github.com/leanprover/lean4/issues/465) with Lean's
+pretty printer that makes notations a bit difficult to work with. At the current state,
+I have to perform a small workaround :
+
+```lean
+local infixl:70 " * " => id Magma.law G
+@[appUnexpander id] def unexpandMul : Lean.PrettyPrinter.Unexpander
+  | `(id Magma.law G $x $y) => `($x * $y)
+  | _ => throw ()
+```
+
+This didn't cause any trouble (for the moment), and as soon as the issue will be fixed
+I'll just have to remove the extra `id` and the `appUnexpander`, and all will work
+Just Fine™.
 
 ### Coercion
 
