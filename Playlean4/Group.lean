@@ -1,6 +1,28 @@
 
 set_option quotPrecheck false
 
+universes u
+def id' {α : Sort u} (a : α) : α := a
+
+section
+
+def Set (X : Type) := X → Prop
+
+namespace Set
+
+def mem {X : Type} (x : X) (s : Set X) := s x
+
+infix:50 " ∈ " => mem
+
+theorem ext {X : Type} (s₁ s₂ : Set X) (h : ∀ x : X, x ∈ s₁ ↔ x ∈ s₂) : s₁ = s₂ :=
+by
+  funext x
+  exact propext <| h x
+
+end Set
+
+end
+
 structure Magma where
   carrier : Type
   law : carrier → carrier → carrier
@@ -12,9 +34,9 @@ variable (G : Magma)
 instance CoeCarrier : CoeSort Magma Type where
   coe m := m.carrier
 
-local infixl:70 " * " => id Magma.law G
-@[appUnexpander id] def unexpandMul : Lean.PrettyPrinter.Unexpander
-  | `(id Magma.law G $x $y) => `($x * $y)
+local infixl:70 " * " => id' Magma.law G
+@[appUnexpander id'] def unexpandMul : Lean.PrettyPrinter.Unexpander
+  | `(id' Magma.law G $x $y) => `($x * $y)
   | _ => throw ()
 
 class Group where
@@ -33,9 +55,9 @@ section
 
 variable {G : Magma} [h : Group G]
 
-local infixl:70 " * " => id Magma.law G
-@[appUnexpander id] def unexpandMul : Lean.PrettyPrinter.Unexpander
-  | `(id Magma.law G $x $y) => `($x * $y)
+local infixl:70 " * " => id' Magma.law G
+@[appUnexpander id'] def unexpandMul : Lean.PrettyPrinter.Unexpander
+  | `(id' Magma.law G $x $y) => `($x * $y)
   | _ => throw ()
 local notation "one" => h.one' -- HACK
 
@@ -130,13 +152,13 @@ instance : CoeFun (Morphism G H) (fun _ => G → H) where
 
 variable (φ : Morphism G H)
 
-local infixl " * " => id Magma.law G
-@[appUnexpander id] def unexpandGMul : Lean.PrettyPrinter.Unexpander
-  | `(id Magma.law G $x $y) => `($x * $y)
+local infixl " * " => id' Magma.law G
+@[appUnexpander id'] def unexpandGMul : Lean.PrettyPrinter.Unexpander
+  | `(id' Magma.law G $x $y) => `($x * $y)
   | _ => throw ()
-local infixl " * " => id Magma.law H
-@[appUnexpander id] def unexpandHMul : Lean.PrettyPrinter.Unexpander
-  | `(id Magma.law H $x $y) => `($x * $y)
+local infixl " * " => id' Magma.law H
+@[appUnexpander id'] def unexpandHMul : Lean.PrettyPrinter.Unexpander
+  | `(id' Magma.law H $x $y) => `($x * $y)
   | _ => throw ()
 local notation "one" => Group.one' -- HACK
 
@@ -183,6 +205,21 @@ variable (G : Magma) [h : Group G]
 local infixl:70 " * " => G.law
 local notation "one" => h.one' -- HACK
 
+section
+
+variable {X : Type} (law : G → X → X)
+
+local infix:70 " • " => id' law
+@[appUnexpander id'] def unexpandAction : Lean.PrettyPrinter.Unexpander
+  | `(id' law $x $y) => `($x * $y)
+  | _ => throw ()
+
+class Action where
+  identity' : ∀ x : X, one • x = x
+  compat : ∀ (g g' : G) (x : X), (g * g') • x = g • (g' • x)
+
+end
+
 structure Subgroup where
   p : G → Prop
   oneMem : p one
@@ -191,15 +228,96 @@ structure Subgroup where
 
 end
 
-namespace Subgroup
-
 variable {G : Magma} [h : Group G]
 
-local infixl:70 " * " => id Magma.law G
-@[appUnexpander id] def unexpandGMul : Lean.PrettyPrinter.Unexpander
-  | `(id Magma.law G $x $y) => `($x * $y)
+local infixl:70 " * " => id' Magma.law G
+@[appUnexpander id'] def unexpandGMul : Lean.PrettyPrinter.Unexpander
+  | `(id' Magma.law G $x $y) => `($x * $y)
   | _ => throw ()
 local notation "one" => h.one' -- HACK
+
+namespace Action
+
+section
+
+variable {X : Type} {law : G → X → X} [action : Action G law]
+
+local infix:70 " • " => id' law
+@[appUnexpander id'] def unexpandAction : Lean.PrettyPrinter.Unexpander
+  | `(id' law $x $y) => `($x • $y)
+  | _ => throw ()
+
+@[simp]
+theorem identity (x : X) : one • x = x := action.identity' x
+
+end
+
+namespace Remarkable
+
+variable {X : Type} (law : G → X → X) [action : Action G law]
+
+local infix:70 " • " => id' law
+@[appUnexpander id'] def unexpandAction : Lean.PrettyPrinter.Unexpander
+  | `(id' law $x $y) => `($x • $y)
+  | _ => throw ()
+
+section
+
+def liftToSet : (G → Set X → Set X) :=
+  λ (g : G) (s : Set X) => (λ x : X => ∃ (y : X), (y ∈ s) ∧ (x = g • y) )
+
+--local infix:70 " •• " => id' (liftToSet law)
+--@[appUnexpander id'] def unexpandLiftedAction : Lean.PrettyPrinter.Unexpander
+--  | `(id' (liftToSet law) $x $y) => `($x •• $y)
+--  | _ => throw ()
+
+instance actionOnSet : Action G (liftToSet law) where
+  identity' := by
+    intro x
+    simp [liftToSet]
+    funext a
+    exact propext ⟨ (λ h => match h with
+      | ⟨ y, h ⟩ => by exact h.2 ▸ (action.identity _).symm ▸ h.1),
+      (λ h => ⟨ a, ⟨ h, (action.identity _).symm ▸ rfl ⟩ ⟩) ⟩
+  compat := by
+    intro g g' x
+    simp [liftToSet]
+    funext a
+    exact propext ⟨
+      (λ h => match h with
+      | ⟨ y, h ⟩ => ⟨ g' • y,
+        (action.compat _ _ _) ▸ ⟨ ⟨ y, ⟨ h.1, rfl ⟩ ⟩, h.2 ⟩ ⟩),
+      (λ h => match h with
+      | ⟨ y₁, ⟨ ⟨ y₂, ⟨ y₂In, h₁ ⟩ ⟩, h₂ ⟩ ⟩ =>
+        ⟨ y₂, ⟨ y₂In, (action.compat _ _ _).symm ▸ h₁ ▸ h₂ ⟩ ⟩) ⟩
+
+end
+
+section
+
+variable (Y : Set X) (stable : ∀ y : X, y ∈ Y → ∀ g : G, id' law g y ∈ Y)
+
+def restr (g : G) (y : Subtype Y) : Subtype Y :=
+  ⟨ g • y.1, stable y.1 y.2 g ⟩
+
+instance restrAction : Action G (restr law Y stable) where
+  identity' := by
+    intro y
+    apply Subtype.eq
+    simp [restr, id', show law one y = y from action.identity y]
+  compat := by
+    intro g g' y
+    apply Subtype.eq
+    simp [restr, id',
+      show law (G.law g g') y = law g (law g' y) from action.compat _ _ _]
+
+end
+
+end Remarkable
+
+end Action
+
+namespace Subgroup
 
 def coeMagma (H : Subgroup G) : Magma :=
   ⟨ Subtype H.p, λ g g' => ⟨ (g : G) * (g' : G), H.mulMem g g' ⟩ ⟩
@@ -297,9 +415,9 @@ end
 
 variable {H : Subgroup G}
 
-local infixl:70 " * " => id Magma.law H
-@[appUnexpander id] def unexpandHMul : Lean.PrettyPrinter.Unexpander
-  | `(id Magma.law H $x $y) => `($x * $y)
+local infixl:70 " * " => id' Magma.law H
+@[appUnexpander id'] def unexpandHMul : Lean.PrettyPrinter.Unexpander
+  | `(id' Magma.law H $x $y) => `($x * $y)
   | _ => throw ()
 
 instance (c : leftClass H) : Inhabited (c : Type) where
@@ -483,8 +601,8 @@ namespace Morphism
 
 variable {G H : Magma} [Group G] [Group H] (φ : Morphism G H)
 
-local infixl:70 " * " => id Magma.law G
-local infix:70 " * " => id Magma.law H
+local infixl:70 " * " => id' Magma.law G
+local infix:70 " * " => id' Magma.law H
 
 def kernel : Subgroup G := Subgroup.ofInhabitedMulInvStable
   (λ g => φ g = one')
@@ -506,9 +624,9 @@ namespace Group
 
 variable (G : Magma) [Group G]
 
-local infixl:65 " + " => id Magma.law G
-@[appUnexpander id] def unexpandAdd : Lean.PrettyPrinter.Unexpander
-  | `(id Magma.law G $x $y) => `($x + $y)
+local infixl:65 " + " => id' Magma.law G
+@[appUnexpander id'] def unexpandAdd : Lean.PrettyPrinter.Unexpander
+  | `(id' Magma.law G $x $y) => `($x + $y)
   | _ => throw ()
 
 class Abelian extends Group G where
