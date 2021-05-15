@@ -5,7 +5,7 @@ namespace Group
 
 section
 
-variable (G : Magma) [h : Group G]
+variable (G : Magma) [h : Group G] (H : Set G)
 
 local infixl:70 " * " => id' Magma.law G
 @[appUnexpander id'] def subgroup.unexpandMul : Lean.PrettyPrinter.Unexpander
@@ -13,11 +13,10 @@ local infixl:70 " * " => id' Magma.law G
   | _ => throw ()
 local notation "one" => h.one' -- HACK
 
-structure Subgroup where
-  p : G → Prop
-  oneMem : p one
-  mulMem : ∀ g g' : Subtype p, p ((g : G) * g')
-  invMem : ∀ g : Subtype p, p ((g : G)⁻¹)
+class Subgroup where
+  oneMem : one ∈ H
+  mulMem : ∀ {g}, g ∈ H → ∀ {g'}, g' ∈ H → g * g' ∈ H
+  invMem : ∀ {g}, g ∈ H → g⁻¹ ∈ H
 
 end
 
@@ -31,65 +30,52 @@ local infixl:70 " * " => id' Magma.law G
   | _ => throw ()
 local notation "one" => h.one' -- HACK
 
-def coeMagma (H : Subgroup G) : Magma :=
-  ⟨ Subtype H.p, λ g g' => ⟨ (g : G) * (g' : G), H.mulMem g g' ⟩ ⟩
+def asMagma (H : Set G) [Subgroup G H] : Magma :=
+  ⟨ Subtype H, λ g g' => ⟨ (g : G) * (g' : G), mulMem g.2 g'.2 ⟩ ⟩
 
-instance SubgroupCoeMagma : CoeHead (Subgroup G) Magma where
-  coe := coeMagma
-
-instance SubgroupCoeCarrier : CoeSort (Subgroup G) Type where
-  coe H := ((H : Magma) : Type)
-
-instance GroupOfSubgroup (H : Subgroup G) : Group H where
-  one' := ⟨ one, H.oneMem ⟩
+instance GroupOfSubgroup (H : Set G) [Subgroup G H] : Group (asMagma H) where
+  one' := ⟨ one, oneMem ⟩
   assoc := λ g g' g'' => Subtype.eq <| h.assoc g.val g'.val g''.val
   oneNeutralRight := λ g => Subtype.eq <| h.oneNeutralRight g.val
-  invertible := λ g => ⟨ ⟨ g.val⁻¹, H.invMem g ⟩, Subtype.eq <| invCancelRight (g.val : G) ⟩
+  invertible := λ g => ⟨ ⟨ g.val⁻¹, invMem g.2 ⟩, Subtype.eq <| invCancelRight (g.val : G) ⟩
 
 section -- "variable" doesn't work here for some reason
 
-theorem lemma₁ {p : G → Prop}
-  (inhabited : ∃ g : G, p g)
-  (mulInvStable : ∀ {g g' : G}, p g → p g' → p (g * g'⁻¹)) : p one :=
+theorem lemma₁ {H : G → Prop}
+  (inhabited : ∃ g : G, g ∈ H)
+  (mulInvStable : ∀ {g}, g ∈ H → ∀ {g'}, g' ∈ H → g * g'⁻¹ ∈ H) : one ∈ H :=
 match inhabited with
   | ⟨ g, h ⟩ => invCancelRight g ▸ mulInvStable h h
 
-theorem lemma₂ {p : G → Prop}
-  (inhabited : ∃ g : G, p g)
-  (mulInvStable : ∀ {g g' : G}, p g → p g' → p (g * g'⁻¹)) :
-    ∀ g : Subtype p, p (g⁻¹) := λ g =>
-oneNeutralLeft ((g : G)⁻¹) ▸ mulInvStable (lemma₁ inhabited mulInvStable) g.2
+theorem lemma₂ {H : G → Prop}
+  (inhabited : ∃ g : G, g ∈ H)
+  (mulInvStable : ∀ {g}, g ∈ H → ∀ {g'}, g' ∈ H → g * g'⁻¹ ∈ H) :
+    ∀ {g}, g ∈ H → g⁻¹ ∈ H := λ {g} hg =>
+oneNeutralLeft (g⁻¹) ▸ mulInvStable (lemma₁ inhabited mulInvStable) hg
 
-theorem lemma₃ {p : G → Prop}
-  (inhabited : ∃ g : G, p g)
-  (mulInvStable : ∀ {g g' : G}, p g → p g' → p (g * g'⁻¹)) :
-    ∀ g g' : Subtype p, p ((g : G) * (g' : G)) := λ g g' =>
-invInvolutive g'.1 ▸ mulInvStable g.2 (lemma₂ inhabited mulInvStable g')
+theorem lemma₃ {H : G → Prop}
+  (inhabited : ∃ g : G, g ∈ H)
+  (mulInvStable : ∀ {g : G}, g ∈ H → ∀ {g' : G}, g' ∈ H → g * g'⁻¹ ∈ H) :
+    ∀ {g}, g ∈ H → ∀ {g'}, g' ∈ H → g * g' ∈ H := λ {g} hg {g'} hg' =>
+invInvolutive g' ▸ mulInvStable hg (lemma₂ inhabited mulInvStable hg')
 
 end
 
-def ofInhabitedMulInvStable (p : G → Prop)
-  (inhabited : ∃ g : G, p g)
-  (mulInvStable : ∀ {g g' : G}, p g → p g' → p (g * g'⁻¹)) : Subgroup G where
-  p := p
+instance ofInhabitedMulInvStable {H : G → Prop}
+  (inhabited : ∃ g : G, g ∈ H)
+  (mulInvStable : ∀ {g}, g ∈ H → ∀ {g'}, g' ∈ H → g * g'⁻¹ ∈ H) : Subgroup G H where
   oneMem := lemma₁ inhabited mulInvStable
   mulMem := lemma₃ inhabited mulInvStable
   invMem := lemma₂ inhabited mulInvStable
 
-variable (H : Subgroup G)
+variable (H : Set G) [sg : Subgroup G H]
 
-def embedding : Morphism H G where
-  f g := g.val
-  respectMul' := λ g g' : Subtype H.p => by rfl
+def op : Set (Gᵒᵖ) := H
 
-instance SubgroupCoe : CoeHead ((H : Magma) : Type) (G : Type) where
-  coe := embedding H
-
-def op : Subgroup (Gᵒᵖ) where
-  p := H.p
-  oneMem := H.oneMem
-  mulMem := λ g g' => H.mulMem g' g
-  invMem := H.invMem
+instance opIsSubgroup : Subgroup (Gᵒᵖ) (op H) where
+  oneMem := sg.oneMem
+  mulMem := λ {g} hg {g'} hg' => sg.mulMem hg' hg
+  invMem := sg.invMem
 
 notation H "ᵒᵖ" => op H
 

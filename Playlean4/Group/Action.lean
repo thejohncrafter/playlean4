@@ -1,9 +1,12 @@
 
 import Playlean4.Group.Basic
+import Playlean4.Group.Subgroup
 
 namespace Group
 
 open Group
+
+section
 
 variable (G : Magma) [h : Group G]
 
@@ -28,13 +31,15 @@ class Action where
 
 end
 
-variable {G : Magma} [h : Group G]
+end
+
+variable {G : Magma} [grp : Group G]
 
 local infixl:70 " * " => id' Magma.law G
 @[appUnexpander id'] def unexpandGMul : Lean.PrettyPrinter.Unexpander
   | `(id' Magma.law G $x $y) => `($x * $y)
   | _ => throw ()
-local notation "one" => h.one' -- HACK
+local notation "one" => grp.one' -- HACK
 
 namespace Action
 
@@ -50,9 +55,50 @@ local infix:70 " • " => id' law
 @[simp]
 theorem identity (x : X) : one • x = x := action.identity' x
 
+theorem reverseCompat (g g' : G) (x : X) : g • (g' • x) = (g * g') • x :=
+Eq.symm <| action.compat g g' x
+
+end
+
+section
+
+variable {X : Type} (law : G → X → X) [action : Action G law]
+
+local infix:70 " • " => id' law
+@[appUnexpander id'] def unexpandAction' : Lean.PrettyPrinter.Unexpander
+  | `(id' law $x $y) => `($x • $y)
+  | _ => throw ()
+
+def isStable (Y : Set X) : Prop := ∀ y : X, y ∈ Y → ∀ g : G, id' law g y ∈ Y
+
+def orbit (x : X) : Set X := λ y => ∃ g : G, y = g • x
+
+def memOfSelfOrbit (x : X) : x ∈ orbit law x := ⟨ one, by simp ⟩
+
+#print memOfSelfOrbit
+
+theorem orbitIsStable (x : X) : isStable law (orbit law x) :=
+λ y yIn g => match yIn with
+  | ⟨ g', h ⟩ =>  ⟨ (g * g'), by rw [h, ← action.compat] ⟩
+
+def stabilizer (x : X) : Set G := λ g => g • x = x
+
+class Transitive where
+  singleOrbit : ∀ x y : X, ∃ g : G, y = g • x
+
 end
 
 namespace Remarkable
+
+section
+
+def onSelf : G → G → G := Magma.law G
+
+instance onSelfIsAction : Action G onSelf where
+  identity' := λ g => by simp [onSelf]; exact grp.oneNeutralLeft _
+  compat := λ g g' g'' => by simp [onSelf]; exact grp.assoc _ _ _
+
+end
 
 variable {X : Type} (law : G → X → X) [action : Action G law]
 
@@ -95,10 +141,9 @@ end
 
 section
 
-variable (Y : Set X) (stable : ∀ y : X, y ∈ Y → ∀ g : G, id' law g y ∈ Y)
+variable (Y : Set X) (stable : isStable law Y)
 
-def restr (g : G) (y : Subtype Y) : Subtype Y :=
-  ⟨ g • y.1, stable y.1 y.2 g ⟩
+def restr : G → Y → Y := λ g y => ⟨ g • y.1, stable y.1 y.2 g ⟩
 
 instance restrAction : Action G (restr law Y stable) where
   identity' := by
@@ -110,6 +155,41 @@ instance restrAction : Action G (restr law Y stable) where
     apply Subtype.eq
     simp [restr, id',
       show law (G.law g g') y = law g (law g' y) from action.compat _ _ _]
+
+end
+
+section
+
+variable (x₀ : X)
+
+def onOrbit : G → orbit law x₀ → orbit law x₀ :=
+  restr law (orbit law x₀) (orbitIsStable law x₀)
+
+--instance onOrbitAction : Action G (onOrbit law x₀) :=
+--  restrAction law (orbit law x₀) (orbitIsStable law x₀)
+
+instance onOrbitTransitive : Transitive (onOrbit law x₀) where
+  singleOrbit := by
+    intro ⟨ x, xIn ⟩ ⟨ y, yIn ⟩
+    match xIn, yIn with
+    | ⟨ g₁, xIs ⟩, ⟨ g₂, yIs ⟩ =>
+      suffices p₂ : y = (g₂ * g₁⁻¹) • x
+      from ⟨ (g₂ * g₁⁻¹), Subtype.eq p₂ ⟩
+      simp [xIs, yIs, action.reverseCompat]
+
+end
+
+section
+
+def leftTranslation : G → G → G := λ g g' => g * g'
+
+instance leftTranslationAction (g : G) : Action G leftTranslation where
+  identity' := λ x => by
+    simp [id', leftTranslation]
+    exact @oneNeutralLeft G _ _
+  compat := λ g g' g'' => by
+    simp [id', leftTranslation]
+    exact @assoc G _ _ _ _
 
 end
 

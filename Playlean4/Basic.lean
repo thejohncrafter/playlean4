@@ -15,4 +15,10 @@ by
   funext x
   exact propext <| h x
 
+@[inline]
+def asSubtype {X : Type} (Y : Set X) := Subtype (λ x => x ∈ Y)
+
+instance {X : Type} : CoeSort (Set X) Type where
+  coe Y := Subtype (λ x => x ∈ Y)
+
 end Set
