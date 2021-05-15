@@ -11,8 +11,6 @@ maybe Lagrange's theorem.
 I have made some design choices that diverge from Lean 3's mathlib that I'd like
 to share with the Lean community, hopefully you'll find some ideas interesting.
 
-**For now, everything is in `Playlean4/Group.lean`.**
-
 ## Design choices
 
 Most of the desing choices were motivated by the fact that when I have a group,
