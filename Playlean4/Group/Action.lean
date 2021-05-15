@@ -75,7 +75,7 @@ def orbit (x : X) : Set X := λ y => ∃ g : G, y = g • x
 
 def memOfSelfOrbit (x : X) : x ∈ orbit law x := ⟨ one, by simp ⟩
 
-#print memOfSelfOrbit
+theorem translatorOfMemOfOrbit {x : X} (y : orbit law x) : ∃ g : G, y.val = g • x := y.2
 
 theorem orbitIsStable (x : X) : isStable law (orbit law x) :=
 λ y yIn g => match yIn with
@@ -92,7 +92,7 @@ namespace Remarkable
 
 section
 
-def onSelf : G → G → G := Magma.law G
+def onSelf : G → G → G := id' Magma.law G
 
 instance onSelfIsAction : Action G onSelf where
   identity' := λ g => by simp [onSelf]; exact grp.oneNeutralLeft _
@@ -110,7 +110,7 @@ local infix:70 " • " => id' law
 section
 
 def liftToSet : (G → Set X → Set X) :=
-  λ (g : G) (s : Set X) => (λ x : X => ∃ (y : X), (y ∈ s) ∧ (x = g • y) )
+  λ (g : G) => Set.img (λ x => g • x)
 
 --local infix:70 " •• " => id' (liftToSet law)
 --@[appUnexpander id'] def unexpandLiftedAction : Lean.PrettyPrinter.Unexpander
@@ -123,19 +123,19 @@ instance actionOnSet : Action G (liftToSet law) where
     simp [liftToSet]
     funext a
     exact propext ⟨ (λ h => match h with
-      | ⟨ y, h ⟩ => by exact h.2 ▸ (action.identity _).symm ▸ h.1),
-      (λ h => ⟨ a, ⟨ h, (action.identity _).symm ▸ rfl ⟩ ⟩) ⟩
+      | ⟨ y, h ⟩ => by rw [h.2]; simp; exact h.1),
+      (λ h => ⟨ a, ⟨ h, by simp ⟩ ⟩) ⟩
   compat := by
     intro g g' x
     simp [liftToSet]
     funext a
     exact propext ⟨
       (λ h => match h with
-      | ⟨ y, h ⟩ => ⟨ g' • y,
+      | ⟨ y, h ⟩ => ⟨ g' • y, by simp only []; exact
         (action.compat _ _ _) ▸ ⟨ ⟨ y, ⟨ h.1, rfl ⟩ ⟩, h.2 ⟩ ⟩),
       (λ h => match h with
-      | ⟨ y₁, ⟨ ⟨ y₂, ⟨ y₂In, h₁ ⟩ ⟩, h₂ ⟩ ⟩ =>
-        ⟨ y₂, ⟨ y₂In, (action.compat _ _ _).symm ▸ h₁ ▸ h₂ ⟩ ⟩) ⟩
+      | ⟨ y₁, ⟨ ⟨ y₂, ⟨ y₂In, (h₁ : y₁ = g' • y₂) ⟩ ⟩, (h₂ : a = g • y₁) ⟩ ⟩ =>
+        ⟨ y₂, ⟨ y₂In, by simp only []; exact (action.compat _ _ _).symm ▸ h₁ ▸ h₂ ⟩ ⟩) ⟩
 
 end
 
@@ -190,6 +190,16 @@ instance leftTranslationAction (g : G) : Action G leftTranslation where
   compat := λ g g' g'' => by
     simp [id', leftTranslation]
     exact @assoc G _ _ _ _
+
+def conjugation : G → G → G := λ g g' => g * g' * g⁻¹
+
+instance conjugationAction (g : G) : Action G conjugation where
+  identity' := λ x => by
+    suffices one * x * one⁻¹ = x by exact this
+    simp
+  compat := λ g g' x => by
+    suffices ((g * g') * x * (g * g')⁻¹ = g * (g' * x * g'⁻¹) * g⁻¹) by exact this
+    simp
 
 end
 

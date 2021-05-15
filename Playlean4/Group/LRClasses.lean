@@ -2,6 +2,7 @@
 import Playlean4.Group.Basic
 import Playlean4.Group.Subgroup
 import Playlean4.Group.Action
+import Playlean4.Group.OnSet
 
 namespace Group
 
@@ -29,26 +30,26 @@ def leftClasses : Set (Set G) := Action.orbit
 def leftClassesAction : G → leftClasses H → leftClasses H :=
   Action.Remarkable.onOrbit
   (Action.Remarkable.liftToSet Action.Remarkable.onSelf) H
+def subgroupAsLeftClass : leftClasses H := ⟨ H, (Action.memOfSelfOrbit _ H) ⟩
 
 def rightClasses : Set (Set G) := @Action.orbit (Gᵒᵖ) _
   (Action.Remarkable.liftToSet Action.Remarkable.onSelf) (Hᵒᵖ)
 def rightClassesAction : G → rightClasses H → rightClasses H :=
   Action.Remarkable.onOrbit
   (Action.Remarkable.liftToSet Action.Remarkable.onSelf) (Hᵒᵖ)
+def subgroupAsRightClass : rightClasses H := ⟨ H, (Action.memOfSelfOrbit _ H) ⟩
 
 theorem leftClassesOnOp : leftClasses (Hᵒᵖ) = rightClasses H := rfl
 theorem rightClassesOnOp : rightClasses (Hᵒᵖ) = leftClasses H := rfl
 
-theorem leftClassIff (P : Set G) : P ∈ leftClasses H ↔
-  ∃ g : G, P = λ g' : G => ∃ g'' : G, g'' ∈ H ∧ g' = g * g'' :=
+theorem leftClassIff (P : Set G) : P ∈ leftClasses H ↔ ∃ g : G, P = g •ₗ H :=
 by
   have p₀ : ∀ {p q : Prop}, (p = q) → (p ↔ q)
   by intro p q h; rw [h]; simp
   apply p₀
   rfl
 
-theorem rightClassIff (P : Set G) : P ∈ rightClasses H ↔
-  ∃ g : G, P = λ g' : G => ∃ g'' : G, g'' ∈ H ∧ g' = g'' * g :=
+theorem rightClassIff (P : Set G) : P ∈ rightClasses H ↔ ∃ g : G, P = H •ᵣ g :=
 by
   have p₀ : ∀ {p q : Prop}, (p = q) → (p ↔ q)
   by intro p q h; rw [h]; simp
@@ -83,6 +84,26 @@ theorem memOfLeftClassOf (g : G) : g ∈ leftClassOf H g :=
 ⟨ one, ⟨ oneMem, (grp.oneNeutralRight g).symm ⟩ ⟩
 theorem memOfRightClassOf (g : G) : g ∈ rightClassOf H g :=
 ⟨ one, ⟨ oneMem, (grp.oneNeutralLeft g).symm ⟩ ⟩
+
+theorem subgroupStabilizer :
+  Action.stabilizer (leftClassesAction H) (subgroupAsLeftClass H) = H :=
+by
+  funext x
+  apply propext
+  apply Iff.intro
+  focus
+    intro h
+    rw [← show _ = H x from (congrFun <| congrArg Subtype.val h) x]
+    apply ⟨ one, ⟨ (sg.oneMem), (grp.oneNeutralRight x).symm ⟩ ⟩
+  focus
+    intro h
+    apply Subtype.eq
+    funext y
+    apply propext
+    suffices p : (∃ h₀, h₀ ∈ H ∧ y = x * h₀) ↔ y ∈ H
+    by exact p
+    exact ⟨ (λ h' => match h' with | ⟨ h₀, ⟨ h₀In, h' ⟩ ⟩ => h' ▸ sg.mulMem h h₀In),
+      λ h' => ⟨ (x⁻¹ * y), ⟨ sg.mulMem (sg.invMem h) h', by simp ⟩ ⟩ ⟩
 
 end
 

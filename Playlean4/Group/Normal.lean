@@ -2,18 +2,19 @@
 import Playlean4.Group.Basic
 import Playlean4.Group.Subgroup
 import Playlean4.Group.LRClasses
+import Playlean4.Group.OnSet
 
 namespace Group
 
 namespace Subgroup
 
-variable {G : Magma} [h : Group G]
+variable {G : Magma} [grp : Group G]
 
 local infixl:70 " * " => id' Magma.law G
 @[appUnexpander id'] def normal.UnexpandGMul : Lean.PrettyPrinter.Unexpander
   | `(id' Magma.law G $x $y) => `($x * $y)
   | _ => throw ()
-local notation "one" => h.one' -- HACK
+local notation "one" => grp.one' -- HACK
 
 section
 
@@ -29,6 +30,42 @@ class Normal where
 
 end
 
+end Subgroup
+
+-- Start with the simple things : the kernel is always normal
+namespace Morphism
+
+variable {G H : Magma} [Group G] [Group H] (φ : Morphism G H)
+
+local infixl:70 " * " => id' Magma.law G
+local infix:70 " * " => id' Magma.law H
+
+def kernel : Set G := λ g => φ g = one'
+
+def kernelIsSubgroup : Subgroup G (kernel φ) := Subgroup.ofInhabitedMulInvStable
+  (⟨ one', φ.respectOne ⟩)
+  (λ {h} hIn h' h'In => by simp [kernel, Set.mem]; rw [hIn, h'In]; simp )
+
+instance kernelIsNormal : Subgroup.Normal (φ.kernel) where
+  stable := λ g k kIn => by
+    suffices p : φ (g * (k : G) * g⁻¹) = one'
+    by exact p
+    have p : φ k = one' := kIn
+    simp [φ.respectMul, p]
+
+end Morphism
+
+namespace Subgroup
+
+variable {G : Magma} [grp : Group G]
+
+local infixl:70 " * " => id' Magma.law G
+@[appUnexpander id'] def normal.UnexpandGMul' : Lean.PrettyPrinter.Unexpander
+  | `(id' Magma.law G $x $y) => `($x * $y)
+  | _ => throw ()
+local notation "one" => grp.one' -- HACK
+
+-- Now prove the converse : a normal subgroup is the kernel of some function
 namespace Normal
 
 variable {H : Set G} [sg : Subgroup G H]
@@ -114,30 +151,105 @@ by
     (memOfLeftClassOf H g) (g * h₀)
   exact (p₁.trans p₂).1 ⟨ h₀, ⟨ h₀In, rfl ⟩ ⟩
 
+section
+
+variable [normal : Normal H]
+
+open Action.Remarkable.OnSet
+
+theorem conjH (g : G) : g •• H = H :=
+by
+  funext h
+  apply propext
+  suffices (∃ h', h' ∈ H ∧ h = g * h' * g⁻¹) ↔ h ∈ H by exact this
+  exact ⟨ λ p => match p with
+    | ⟨ h', ⟨ h'In, p ⟩ ⟩ => p ▸ normal.stable g h'In,
+    λ p => ⟨ (g⁻¹ * h * (g⁻¹⁻¹)), ⟨ normal.stable (g⁻¹) p, by simp ⟩ ⟩ ⟩
+
+theorem moveLeft (g : G) : H •ᵣ g = g •ₗ H :=
+by
+  rw [show H •ᵣ g = (g •• H) •ᵣ g by rw [conjH]]
+  rw [conjugationCompat, ← rightTranslationCompat, invCancelLeft, rightTranslationIdentity]
+
+theorem neutralRight (g : G) : (g •ₗ H) ** H = g •ₗ H :=
+by
+  funext x
+  apply propext
+  apply Iff.intro
+  exact λ h => match h with
+  | ⟨ res, ⟨ h₁, h₁In, resEq ⟩, h₂, h₂In, h₂Eq ⟩ =>
+    ⟨ h₁ * h₂, sg.mulMem h₁In h₂In, by
+      rw [h₂Eq, resEq]
+      suffices g * h₁ * h₂ = g * (h₁ * h₂) by exact this
+      simp ⟩
+  exact λ h => match h with
+    | ⟨ h, hIn, xEq ⟩ =>
+      ⟨ g * h, ⟨ h, hIn, rfl ⟩, one, oneMem, by
+        rw [xEq]
+        suffices g * h = g * h * one by exact this
+        simp ⟩
+
+/-! "pseudo morphism" because there is no notion of magma morphisms (yet !) -/
+theorem pseudoMorphism (g : G) (g' : G) : (g •ₗ H) ** (g' •ₗ H) = (g * g') •ₗ H :=
+by
+  have p : g •ₗ (g' •ₗ H) = (g * g') •ₗ H
+  from (leftActionOnSet.compat g g' H).symm
+  rw [mulOnSetCompat₁, translationCompat, moveLeft, p, neutralRight]
+
+theorem leftClassesStable {P Q : Set G}
+  (PIn : P ∈ leftClasses H) (QIn : Q ∈ leftClasses H) : P ** Q ∈ leftClasses H :=
+by
+  rw [leftClassIff] at PIn
+  rw [leftClassIff] at QIn
+  rw [leftClassIff]
+  match PIn, QIn with
+  | ⟨ g, PIs ⟩, ⟨ g', QIs ⟩ =>
+    rw [PIs, QIs]
+    rw [pseudoMorphism]
+    exact ⟨ g * g', rfl ⟩
+
+def quotientLaw : leftClasses H → leftClasses H → leftClasses H :=
+  λ P Q => ⟨ P ** Q, leftClassesStable P.2 Q.2 ⟩
+
+instance quotientGroup : Group ⟨ (leftClasses H), quotientLaw ⟩ where
+  one' := subgroupAsLeftClass H
+  assoc := λ P₁ P₂ P₃ => by
+    apply Subtype.eq
+    simp [id', quotientLaw]
+    match (leftClassIff _ _).2 P₁.2,
+      (leftClassIff _ _).2 P₂.2,
+      (leftClassIff _ _).2 P₃.2 with
+    | ⟨ g₁, (P₁Is : P₁ = g₁ •ₗ H) ⟩,
+      ⟨ g₂, (P₂Is : P₂ = g₂ •ₗ H) ⟩,
+      ⟨ g₃, (P₃Is : P₃ = g₃ •ₗ H) ⟩ =>
+      rw [P₁Is, P₂Is, P₃Is]
+      simp [pseudoMorphism]
+  oneNeutralRight := λ P => by
+    apply Subtype.eq
+    simp only [id', quotientLaw]
+    exact match (leftClassIff _ _).2 P.2 with
+    | ⟨ g, PIs ⟩ => PIs ▸ neutralRight _
+  invertible := λ P => by
+    simp only [id', quotientLaw]
+    match (leftClassIff _ _).2 P.2 with
+    | ⟨ g, (PIs : P = g •ₗ H)⟩ =>
+      apply Exists.intro (leftClassOf H (g⁻¹))
+      apply Subtype.eq
+      suffices P.1 ** (g⁻¹ •ₗ H) = H by exact this
+      rw [PIs]
+      simp only [pseudoMorphism, invCancelRight]
+      exact leftActionOnSet.identity H
+
+def canonicalSurjection : Morphism G ⟨ (leftClasses H), quotientLaw ⟩ where
+  f := λ g => ⟨ g •ₗ H, by
+    rw [leftClassIff]
+    exact ⟨ g, rfl ⟩ ⟩
+  respectMul' := λ g g' => Subtype.eq <| (pseudoMorphism _ _).symm
+
+end
+
 end Normal
 
 end Subgroup
-
-namespace Morphism
-
-variable {G H : Magma} [Group G] [Group H] (φ : Morphism G H)
-
-local infixl:70 " * " => id' Magma.law G
-local infix:70 " * " => id' Magma.law H
-
-def kernel : Set G := λ g => φ g = one'
-
-def kernelIsSubgroup : Subgroup G (kernel φ) := Subgroup.ofInhabitedMulInvStable
-  (⟨ one', φ.respectOne ⟩)
-  (λ {h} hIn h' h'In => by simp [kernel, Set.mem]; rw [hIn, h'In]; simp )
-
-instance kernelIsNormal : Subgroup.Normal (φ.kernel) where
-  stable := λ g k kIn => by
-    suffices p : φ (g * (k : G) * g⁻¹) = one'
-    by exact p
-    have p : φ k = one' := kIn
-    simp [φ.respectMul, p]
-
-end Morphism
 
 end Group

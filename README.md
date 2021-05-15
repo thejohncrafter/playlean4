@@ -4,8 +4,9 @@
 This repo just contains some code that I am writing to play with Lean 4
 (hence the name).
 
-I'm currently working on groups, my goal is currently to define group quotients,
-then I'd like to move on more tools for group acctions, and maybe Lagrange's theorem.
+I'm currently working on groups. I already defined group quotients, and defined some tools
+for group actions along the way. Now I'd like to move on to some basic finite group theory,
+maybe Lagrange's theorem.
 
 I have made some design choices that diverge from Lean 3's mathlib that I'd like
 to share with the Lean community, hopefully you'll find some ideas interesting.
