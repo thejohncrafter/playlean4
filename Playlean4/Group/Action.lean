@@ -8,21 +8,21 @@ open Group
 
 section
 
-variable (G : Magma) [h : Group G]
+variable (G : Type) (law : G → G → G) [grp : Group G law]
 
-local infixl:70 " * " => id' Magma.law G
+local infixl:70 " * " => id' law
 @[appUnexpander id'] def normal.UnexpandGMul : Lean.PrettyPrinter.Unexpander
-  | `(id' Magma.law G $x $y) => `($x * $y)
+  | `(id' law $x $y) => `($x * $y)
   | _ => throw ()
-local notation "one" => h.one' -- HACK
+local notation "one" => grp.one' -- HACK
 
 section
 
-variable {X : Type} (law : G → X → X)
+variable {X : Type} (elaw : G → X → X) -- External Law
 
-local infix:70 " • " => id' law
+local infix:70 " • " => id' elaw
 @[appUnexpander id'] def unexpandAction : Lean.PrettyPrinter.Unexpander
-  | `(id' law $x $y) => `($x * $y)
+  | `(id' elaw $x $y) => `($x * $y)
   | _ => throw ()
 
 class Action where
@@ -33,23 +33,26 @@ end
 
 end
 
-variable {G : Magma} [grp : Group G]
+section
 
-local infixl:70 " * " => id' Magma.law G
+variable {G : Type} {law : G → G → G} [grp : Group G law]
+
+local infixl:70 " * " => id' law
 @[appUnexpander id'] def unexpandGMul : Lean.PrettyPrinter.Unexpander
   | `(id' Magma.law G $x $y) => `($x * $y)
   | _ => throw ()
 local notation "one" => grp.one' -- HACK
+local notation g"⁻¹" => grp.inv g
 
 namespace Action
 
 section
 
-variable {X : Type} {law : G → X → X} [action : Action G law]
+variable {X : Type} {elaw : G → X → X} [action : Action G law elaw]
 
-local infix:70 " • " => id' law
+local infix:70 " • " => id' elaw
 @[appUnexpander id'] def unexpandAction : Lean.PrettyPrinter.Unexpander
-  | `(id' law $x $y) => `($x • $y)
+  | `(id' elaw $x $y) => `($x • $y)
   | _ => throw ()
 
 @[simp]
@@ -60,24 +63,39 @@ Eq.symm <| action.compat g g' x
 
 end
 
+end Action
+
+end
+
+namespace Action
+
+variable {G : Type} (law : G → G → G) [grp : Group G law]
+
+local infixl:70 " * " => id' law
+@[appUnexpander id'] def unexpandGMul : Lean.PrettyPrinter.Unexpander
+  | `(id' Magma.law G $x $y) => `($x * $y)
+  | _ => throw ()
+local notation "one" => grp.one' -- HACK
+local notation g"⁻¹" => grp.inv g
+
 section
 
-variable {X : Type} (law : G → X → X) [action : Action G law]
+variable {X : Type} (elaw : G → X → X) [action : Action G law elaw]
 
-local infix:70 " • " => id' law
+local infix:70 " • " => id' elaw
 @[appUnexpander id'] def unexpandAction' : Lean.PrettyPrinter.Unexpander
-  | `(id' law $x $y) => `($x • $y)
+  | `(id' elaw $x $y) => `($x • $y)
   | _ => throw ()
 
-def isStable (Y : Set X) : Prop := ∀ y : X, y ∈ Y → ∀ g : G, id' law g y ∈ Y
+def isStable (Y : Set X) : Prop := ∀ y : X, y ∈ Y → ∀ g : G, g • y ∈ Y
 
 def orbit (x : X) : Set X := λ y => ∃ g : G, y = g • x
 
-def memOfSelfOrbit (x : X) : x ∈ orbit law x := ⟨ one, by simp ⟩
+def memOfSelfOrbit (x : X) : x ∈ orbit elaw x := ⟨ one, by simp ⟩
 
-theorem translatorOfMemOfOrbit {x : X} (y : orbit law x) : ∃ g : G, y.val = g • x := y.2
+theorem translatorOfMemOfOrbit {x : X} (y : orbit elaw x) : ∃ g : G, y.val = g • x := y.2
 
-theorem orbitIsStable (x : X) : isStable law (orbit law x) :=
+theorem orbitIsStable (x : X) : isStable elaw (orbit elaw x) :=
 λ y yIn g => match yIn with
   | ⟨ g', h ⟩ =>  ⟨ (g * g'), by rw [h, ← action.compat] ⟩
 
@@ -92,19 +110,19 @@ namespace Remarkable
 
 section
 
-def onSelf : G → G → G := id' Magma.law G
+def onSelf : G → G → G := id' law
 
-instance onSelfIsAction : Action G onSelf where
+instance onSelfIsAction : Action G law (@onSelf G law) where
   identity' := λ g => by simp [onSelf]; exact grp.oneNeutralLeft _
   compat := λ g g' g'' => by simp [onSelf]; exact grp.assoc _ _ _
 
 end
 
-variable {X : Type} (law : G → X → X) [action : Action G law]
+variable {X : Type} (elaw : G → X → X) [action : Action G law elaw]
 
-local infix:70 " • " => id' law
+local infix:70 " • " => id' elaw
 @[appUnexpander id'] def unexpandAction : Lean.PrettyPrinter.Unexpander
-  | `(id' law $x $y) => `($x • $y)
+  | `(id' elaw $x $y) => `($x • $y)
   | _ => throw ()
 
 section
@@ -112,12 +130,7 @@ section
 def liftToSet : (G → Set X → Set X) :=
   λ (g : G) => Set.img (λ x => g • x)
 
---local infix:70 " •• " => id' (liftToSet law)
---@[appUnexpander id'] def unexpandLiftedAction : Lean.PrettyPrinter.Unexpander
---  | `(id' (liftToSet law) $x $y) => `($x •• $y)
---  | _ => throw ()
-
-instance actionOnSet : Action G (liftToSet law) where
+instance actionOnSet : Action G law (liftToSet elaw) where
   identity' := by
     intro x
     simp [liftToSet]
@@ -141,20 +154,20 @@ end
 
 section
 
-variable (Y : Set X) (stable : isStable law Y)
+variable (Y : Set X) (stable : isStable elaw Y)
 
 def restr : G → Y → Y := λ g y => ⟨ g • y.1, stable y.1 y.2 g ⟩
 
-instance restrAction : Action G (restr law Y stable) where
+instance restrAction : Action G law (restr elaw Y stable) where
   identity' := by
     intro y
     apply Subtype.eq
-    simp [restr, id', show law one y = y from action.identity y]
+    simp [restr, id', show elaw one y = y from action.identity y]
   compat := by
     intro g g' y
     apply Subtype.eq
     simp [restr, id',
-      show law (G.law g g') y = law g (law g' y) from action.compat _ _ _]
+      show elaw (law g g') y = elaw g (elaw g' y) from action.compat _ _ _]
 
 end
 
@@ -162,13 +175,10 @@ section
 
 variable (x₀ : X)
 
-def onOrbit : G → orbit law x₀ → orbit law x₀ :=
-  restr law (orbit law x₀) (orbitIsStable law x₀)
+def onOrbit : G → orbit elaw x₀ → orbit elaw x₀ :=
+  restr elaw (orbit elaw x₀) (orbitIsStable law elaw x₀)
 
---instance onOrbitAction : Action G (onOrbit law x₀) :=
---  restrAction law (orbit law x₀) (orbitIsStable law x₀)
-
-instance onOrbitTransitive : Transitive (onOrbit law x₀) where
+instance onOrbitTransitive : Transitive (onOrbit law elaw x₀) where
   singleOrbit := by
     intro ⟨ x, xIn ⟩ ⟨ y, yIn ⟩
     match xIn, yIn with
@@ -183,17 +193,17 @@ section
 
 def leftTranslation : G → G → G := λ g g' => g * g'
 
-instance leftTranslationAction (g : G) : Action G leftTranslation where
+instance leftTranslationAction (g : G) : Action G law (leftTranslation law) where
   identity' := λ x => by
     simp [id', leftTranslation]
-    exact @oneNeutralLeft G _ _
+    exact @oneNeutralLeft G law _ _
   compat := λ g g' g'' => by
     simp [id', leftTranslation]
-    exact @assoc G _ _ _ _
+    exact @assoc G law _ _ _ _
 
 def conjugation : G → G → G := λ g g' => g * g' * g⁻¹
 
-instance conjugationAction (g : G) : Action G conjugation where
+instance conjugationAction (g : G) : Action G law (conjugation law) where
   identity' := λ x => by
     suffices one * x * one⁻¹ = x by exact this
     simp

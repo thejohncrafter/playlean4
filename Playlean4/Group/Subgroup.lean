@@ -5,39 +5,41 @@ namespace Group
 
 section
 
-variable (G : Magma) [h : Group G] (H : Set G)
+variable (G : Type) (law : G → G → G) [grp : Group G law] (H : Set G)
 
-local infixl:70 " * " => id' Magma.law G
+local infixl:70 " * " => id' law
 @[appUnexpander id'] def subgroup.unexpandMul : Lean.PrettyPrinter.Unexpander
-  | `(id' Magma.law G $x $y) => `($x * $y)
+  | `(id' law G $x $y) => `($x * $y)
   | _ => throw ()
-local notation "one" => h.one' -- HACK
+local notation "one" => grp.one' -- HACK
+local notation g"⁻¹" => grp.inv g
 
 class Subgroup where
   oneMem : one ∈ H
   mulMem : ∀ {g}, g ∈ H → ∀ {g'}, g' ∈ H → g * g' ∈ H
-  invMem : ∀ {g}, g ∈ H → g⁻¹ ∈ H
+  invMem : ∀ {g}, g ∈ H → (g⁻¹) ∈ H
 
 end
 
 namespace Subgroup
 
-variable {G : Magma} [h : Group G]
+variable {G : Type} (law : G → G → G) [grp : Group G law]
 
-local infixl:70 " * " => id' Magma.law G
+local infixl:70 " * " => id' law
 @[appUnexpander id'] def unexpandGMul : Lean.PrettyPrinter.Unexpander
   | `(id' Magma.law G $x $y) => `($x * $y)
   | _ => throw ()
-local notation "one" => h.one' -- HACK
+local notation "one" => grp.one' -- HACK
+local notation g"⁻¹" => grp.inv g
 
-def asMagma (H : Set G) [Subgroup G H] : Magma :=
-  ⟨ Subtype H, λ g g' => ⟨ (g : G) * (g' : G), mulMem g.2 g'.2 ⟩ ⟩
+def subgroupLaw (H : Set G) [Subgroup G law H] : H → H → H :=
+  λ g g' => ⟨ (g : G) * (g' : G), mulMem g.2 g'.2 ⟩
 
-instance GroupOfSubgroup (H : Set G) [Subgroup G H] : Group (asMagma H) where
+instance GroupOfSubgroup (H : Set G) [Subgroup G law H] : Group H (subgroupLaw law H) where
   one' := ⟨ one, oneMem ⟩
-  assoc := λ g g' g'' => Subtype.eq <| h.assoc g.val g'.val g''.val
-  oneNeutralRight := λ g => Subtype.eq <| h.oneNeutralRight g.val
-  invertible := λ g => ⟨ ⟨ g.val⁻¹, invMem g.2 ⟩, Subtype.eq <| invCancelRight (g.val : G) ⟩
+  assoc := λ g g' g'' => Subtype.eq <| grp.assoc g.val g'.val g''.val
+  oneNeutralRight := λ g => Subtype.eq <| grp.oneNeutralRight g.val
+  invertible := λ g => ⟨ ⟨ (g.val)⁻¹, invMem g.2 ⟩, Subtype.eq <| invCancelRight (g.val : G) ⟩
 
 section -- "variable" doesn't work here for some reason
 
@@ -51,33 +53,29 @@ theorem lemma₂ {H : G → Prop}
   (inhabited : ∃ g : G, g ∈ H)
   (mulInvStable : ∀ {g}, g ∈ H → ∀ {g'}, g' ∈ H → g * g'⁻¹ ∈ H) :
     ∀ {g}, g ∈ H → g⁻¹ ∈ H := λ {g} hg =>
-oneNeutralLeft (g⁻¹) ▸ mulInvStable (lemma₁ inhabited mulInvStable) hg
+oneNeutralLeft (g⁻¹) ▸ mulInvStable (lemma₁ law inhabited mulInvStable) hg
 
 theorem lemma₃ {H : G → Prop}
   (inhabited : ∃ g : G, g ∈ H)
   (mulInvStable : ∀ {g : G}, g ∈ H → ∀ {g' : G}, g' ∈ H → g * g'⁻¹ ∈ H) :
     ∀ {g}, g ∈ H → ∀ {g'}, g' ∈ H → g * g' ∈ H := λ {g} hg {g'} hg' =>
-invInvolutive g' ▸ mulInvStable hg (lemma₂ inhabited mulInvStable hg')
+invInvolutive g' ▸ mulInvStable hg (lemma₂ law inhabited mulInvStable hg')
 
 end
 
 instance ofInhabitedMulInvStable {H : G → Prop}
   (inhabited : ∃ g : G, g ∈ H)
-  (mulInvStable : ∀ {g}, g ∈ H → ∀ {g'}, g' ∈ H → g * g'⁻¹ ∈ H) : Subgroup G H where
-  oneMem := lemma₁ inhabited mulInvStable
-  mulMem := lemma₃ inhabited mulInvStable
-  invMem := lemma₂ inhabited mulInvStable
+  (mulInvStable : ∀ {g}, g ∈ H → ∀ {g'}, g' ∈ H → g * g'⁻¹ ∈ H) : Subgroup G law H where
+  oneMem := lemma₁ law inhabited mulInvStable
+  mulMem := lemma₃ law inhabited mulInvStable
+  invMem := lemma₂ law inhabited mulInvStable
 
-variable (H : Set G) [sg : Subgroup G H]
+variable (H : Set G) [sg : Subgroup G law H]
 
-def op : Set (Gᵒᵖ) := H
-
-instance opIsSubgroup : Subgroup (Gᵒᵖ) (op H) where
+instance opIsSubgroup : Subgroup G (lawᵒᵖ) H where
   oneMem := sg.oneMem
   mulMem := λ {g} hg {g'} hg' => sg.mulMem hg' hg
   invMem := sg.invMem
-
-notation H "ᵒᵖ" => op H
 
 end Subgroup
 

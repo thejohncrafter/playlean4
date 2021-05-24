@@ -3,20 +3,13 @@ import Playlean4.Basic
 
 set_option quotPrecheck false
 
-structure Magma where
-  carrier : Type
-  law : carrier → carrier → carrier
-
 section
 
-variable (G : Magma)
+variable (G : Type) (law : G → G → G)
 
-instance CoeCarrier : CoeSort Magma Type where
-  coe m := m.carrier
-
-local infixl:70 " * " => id' Magma.law G
+local infixl:70 " * " => id' law
 @[appUnexpander id'] def unexpandMul : Lean.PrettyPrinter.Unexpander
-  | `(id' Magma.law G $x $y) => `($x * $y)
+  | `(id' law $x $y) => `($x * $y)
   | _ => throw ()
 
 class Group where
@@ -31,16 +24,16 @@ namespace Group
 
 section
 
-variable {G : Magma} [h : Group G]
+variable {G : Type} {law : G → G → G} [grp : Group G law]
 
-local infixl:70 " * " => id' Magma.law G
+local infixl:70 " * " => id' law
 @[appUnexpander id'] def unexpandMul : Lean.PrettyPrinter.Unexpander
-  | `(id' Magma.law G $x $y) => `($x * $y)
+  | `(id' law $x $y) => `($x * $y)
   | _ => throw ()
-local notation "one" => h.one' -- HACK
+local notation "one" => grp.one' -- HACK
 
 theorem inverseComm {g h : G} (inv : g * h = one) : h * g = one :=
-by match Group.invertible h with
+by match grp.invertible h with
 | ⟨ k, inv' ⟩ =>
   have p₁ : h * g = h * g * one := (Group.oneNeutralRight _).symm
   have p₂ : h * g * one = h * g * h * k := by rw [Group.assoc (h * g), inv']
@@ -52,20 +45,20 @@ protected theorem oneNeutralRight' (g : G) : g * one = g := Group.oneNeutralRigh
 
 @[simp]
 theorem oneNeutralLeft (g : G) : one * g = g :=
-by match Group.invertible g with
+by match grp.invertible g with
 | ⟨ h, inv ⟩ =>
   rw [← inv, Group.assoc, inverseComm inv, Group.oneNeutralRight]
 
 theorem inverseUnique {g h h' : G} (h₁ : g * h = one) (h₂ : g * h' = one) : h = h' :=
 by
   have p₁ : g * h = g * h' := h₂.symm ▸ h₁
-  have p₂ : h * g * h = h * g * h' := by simp [Group.assoc h, p₁]
+  have p₂ : h * g * h = h * g * h' := by simp [grp.assoc h, p₁]
   simp [inverseComm h₁, oneNeutralLeft] at p₂
   exact p₂
 
-def inv (g : G) : G := (Group.invertible g).1
+def inv (g : G) : G := (grp.invertible g).1
 
-notation g "⁻¹" => inv g
+local notation g "⁻¹" => grp.inv g
 
 @[simp]
 theorem invCancelRight (g : G) : g * g⁻¹ = one := (Group.invertible g).2
@@ -110,10 +103,11 @@ end
 
 section
 
-variable (G H : Magma) [Group G] [Group H]
+variable (G : Type) (lawG : G → G → G) [grpG : Group G lawG]
+variable (H : Type) (lawH : H → H → H) [grpH : Group H lawH]
 
-local infixl " * " => G.law
-local infixl " * " => H.law
+local infixl " * " => lawG
+local infixl " * " => lawH
 
 structure Morphism where
   f : G → H
@@ -123,20 +117,21 @@ end
 
 namespace Morphism
 
-variable {G H : Magma} [Group G] [Group H]
+variable {G : Type} {lawG : G → G → G} [grpG : Group G lawG]
+variable {H : Type} {lawH : H → H → H} [grpH : Group H lawH]
 
-instance : CoeFun (Morphism G H) (fun _ => G → H) where
+instance : CoeFun (Morphism G lawG H lawH) (fun _ => G → H) where
   coe φ := φ.f
 
-variable (φ : Morphism G H)
+variable (φ : Morphism G lawG H lawH)
 
-local infixl " * " => id' Magma.law G
+local infixl " * " => id' lawG
 @[appUnexpander id'] def unexpandGMul : Lean.PrettyPrinter.Unexpander
-  | `(id' Magma.law G $x $y) => `($x * $y)
+  | `(id' lawG $x $y) => `($x * $y)
   | _ => throw ()
-local infixl " * " => id' Magma.law H
+local infixl " * " => id' lawH
 @[appUnexpander id'] def unexpandHMul : Lean.PrettyPrinter.Unexpander
-  | `(id' Magma.law H $x $y) => `($x * $y)
+  | `(id' lawH $x $y) => `($x * $y)
   | _ => throw ()
 local notation "one" => Group.one' -- HACK
 
@@ -144,33 +139,32 @@ local notation "one" => Group.one' -- HACK
 theorem respectMul (g g' : G) : φ (g * g') = φ g * φ g' := φ.respectMul' g g'
 
 @[simp]
-theorem respectOne : φ one = one := by
+theorem respectOne : φ (one lawG) = (one lawH) := by
   apply oneUnique
-  exact ⟨ φ one, by rw [← φ.respectMul, oneNeutralRight] ⟩
+  exact ⟨ φ (one lawG), by rw [← φ.respectMul, oneNeutralRight] ⟩
 
 @[simp]
-theorem respectInv (g : G) : φ (g⁻¹) = (φ g)⁻¹ :=
-isInvOfCancelLeft <| φ.respectMul g (g⁻¹) ▸ invCancelRight g ▸ φ.respectOne
+theorem respectInv (g : G) : φ (grpG.inv g) = grpH.inv (φ g) :=
+isInvOfCancelLeft <| φ.respectMul g (inv g) ▸ invCancelRight g ▸ φ.respectOne
 
 end Morphism
 
-def op (G : Magma) [Group G] : Magma := ⟨ G, λ g₁ g₂ => G.law g₂ g₁ ⟩
+def op {G : Type} (law : G → G → G) [grp : Group G law] : G → G → G := λ g₁ g₂ => law g₂ g₁
 
-notation G "ᵒᵖ" => op G
+notation law "ᵒᵖ" => op law
 
-instance opGroup (G : Magma) [h : Group G] : Group (Gᵒᵖ) where
+instance opGroup (G : Type) (law : G → G → G) [h : Group G law] : Group G (lawᵒᵖ) where
   one' := h.1 -- HACK
   assoc := λ g₁ g₂ g₃ => (h.assoc g₃ g₂ g₁).symm
   oneNeutralRight := h.oneNeutralLeft
   invertible := λ g => ⟨ h.inv g, h.invCancelLeft g ⟩
 
 @[simp]
-theorem opInvolutive (G : Magma) [h : Group G] : op (op G) = G :=
-match G, h with | ⟨ α, f ⟩, h => rfl
+theorem opInvolutive (G : Type) (law : G → G → G) [grp : Group G law] : op (op law) = law := rfl
 
 namespace opGroup
 
-def op (G : Magma) [Group G] : Morphism G (Gᵒᵖ) where
+def op (G : Type) (law : G → G → G) [grp : Group G law] : Morphism G law G (lawᵒᵖ) where
   f := inv
   respectMul' := invMul
 

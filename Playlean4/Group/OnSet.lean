@@ -4,33 +4,36 @@ import Playlean4.Group.Basic
 import Playlean4.Group.Subgroup
 import Playlean4.Group.Action
 
+set_option quotPrecheck.allowSectionVars true
+
 namespace Group.Action.Remarkable
 
 namespace OnSet
 
-variable {G : Magma} [grp : Group G]
+variable {G : Type} (law : G → G → G) [grp : Group G law]
 
-local infixl:70 " * " => id' Magma.law G
+local infixl:70 " * " => id' law
 @[appUnexpander id'] def unexpandGMul : Lean.PrettyPrinter.Unexpander
   | `(id' Magma.law G $x $y) => `($x * $y)
   | _ => throw ()
 local notation "one" => grp.one' -- HACK
+local notation g"⁻¹" => grp.inv g
 
-def leftTranslationOnSet : G → Set G → Set G := (liftToSet onSelf)
-def rightTranslationOnSet : G → Set G → Set G := (@liftToSet (Gᵒᵖ) _ onSelf)
-def conjugationOnSet : G → Set G → Set G := (liftToSet conjugation)
+def leftTranslationOnSet : G → Set G → Set G := (liftToSet (onSelf law))
+def rightTranslationOnSet : G → Set G → Set G := (@liftToSet G _ (onSelf (lawᵒᵖ)))
+def conjugationOnSet : G → Set G → Set G := (liftToSet (conjugation law))
 
-infix:70 " •ₗ " => leftTranslationOnSet
-notation:70 lhs:70 " •ᵣ " rhs:70 => rightTranslationOnSet rhs lhs
-infix:70 " ••  " => conjugationOnSet
+local infix:70 " •ₗ " => leftTranslationOnSet law
+local notation:70 lhs:70 " •ᵣ " rhs:70 => rightTranslationOnSet law rhs lhs
+local infix:70 " ••  " => conjugationOnSet law
 
-instance leftActionOnSet : Action G leftTranslationOnSet := sorry
+instance leftActionOnSet : Action G law (leftTranslationOnSet law) := sorry
 
 theorem rightTranslationIdentity (P : Set G) : P •ᵣ one = P :=
-((@actionOnSet (Gᵒᵖ) _ _ onSelf _).identity P)
+((@actionOnSet G (lawᵒᵖ) _ _ (onSelf (lawᵒᵖ)) _).identity P)
 
 theorem rightTranslationCompat (g g' : G) (P : Set G) : (P •ᵣ (g * g')) = (P •ᵣ g) •ᵣ g' :=
-(@actionOnSet (Gᵒᵖ) _ _ onSelf _).compat g' g P
+(@actionOnSet G (lawᵒᵖ) _ _ (onSelf (lawᵒᵖ)) _).compat g' g P
 
 theorem translationCompat (g g' : G) (P : Set G) : (g •ₗ P) •ᵣ g' = g •ₗ (P •ᵣ g') :=
 by
@@ -49,7 +52,7 @@ by
 def mulOnSet : Set G → Set G → Set G := λ P Q =>
   λ h => ∃ g, g ∈ P ∧ ∃ g', g' ∈ Q ∧ h = g * g'
 
-infixl:70 " ** " => mulOnSet
+local infixl:70 " ** " => mulOnSet law
 
 def mulOnSetCompat₁ (P Q : Set G) (g : G) : P ** (g •ₗ Q) = (P •ᵣ g) ** Q :=
 by
