@@ -4,6 +4,11 @@
 This repo just contains some code that I am writing to play with Lean 4
 (hence the name).
 
+I decided to play with another way of defining the algebraic hierarchy.
+The aim is to make algebra more flexible, but for now I can't tell if this approach
+really has strongs benefits or if it will lead me into more complication than in
+the mathlib approach.
+
 I'm currently working on groups. I already defined group quotients, and defined some tools
 for group actions along the way. Now I'd like to move on to some basic finite group theory,
 maybe Lagrange's theorem.
@@ -21,8 +26,13 @@ I want to chose the name of its law, for two reasons :
 
    Basically, I just want the way I write math in Lean closer to the way I write
    math on a piece of paper : I may just write `let ⟨ G, ⬝ ⟩ be a group`.
+ * This may (untested yet) simplify the way to write about more complex structures.
+   For instance, in a ring, `+` and `*` both form a monoid, and with this approach
+   I become able to use the same lemmas for both these laws (e.g. I don't need `add_assoc` and `mul_assoc`).
 
-   (This is also motivated by my unconditionnal love of esoteric group law symbols :
+   But this may also just move the problem to somewhere else, I wouldn't be surprised to be
+   forced at some point to write `add.comm` and `mul.comm` or something the like.
+ *  (This is also motivated by my unconditionnal love of esoteric group law symbols :
    `⬝` `∙` `⋆` `★` `▵` `¤`; or even `◫`, `¢`, `¥` or `Æ` when I'm in the mood.)
  * I could want at some point to have two grop laws on the same objecs.
    For instance, this happens for the set of paths on a topological group :
@@ -32,54 +42,54 @@ I want to chose the name of its law, for two reasons :
 I can also extend this argument : I might want to have different symbols for different
 actions, and so on.
 
+The downside is that I often have to explicitly pass the law of a grop as a parameter when I
+use theorems, because Lean can't guess what law I'm actually working with
+(see `Group/Action.lean` for instance).
+
+To me, this isn't much of a problem because it is just a way to pay for the flexibility that I wanted,
+but I can understand that other users of Lean may not appreciate this.
+
+The approach I use here would be fully justified if it cut a substantial part of Mathlib's complexity.
+So far, I think that it has its chances, but I can't be sure without experimenting more.
+
 ### Algebraic structures
 
-For now, the base class is `Magma` :
+The difference with mathlib is that, here, the laws of an algebraic object are _not_ part of any typeclass.
 
+When I want to work with a group, I get _both_ a carrier and a law, then I specify that together
+they form a group
 ```lean
-structure Magma where
-  carrier : Type
-  law : carrier → carrier → carrier
+variable (G : Type) (law : G → G → G) [grp : Group G law]
 ```
 
-This allows me to specify _both_ the carrier and the law when I quantify over groups.
-
-Then I have a `group` typeclass :
+The `Group` typeclass is defined as follows :
 
 ```lean
-/- Actually, we need a bit of setup before writing this,
-   but we'll discuss this afterwards -/
-
-class Group where
-  neutral : G
+-- Actually, there is a trick to set up this (we need to define `*` as a notation for `law`)
+class Group (G : Type) (law : G → G → G) where
+  one' : G -- Name hack
   assoc : ∀ g₁ g₂ g₃ : G, (g₁ * g₂) * g₃ = g₁ * (g₂ * g₃)
-  oneNeutralRight : ∀ g : G, g * neutral = g
-  invertible : ∀ g : G, ∃ g' : G, g * g' = neutral
-
+  oneNeutralRight : ∀ g : G, g * one' = g
+  invertible : ∀ g : G, ∃ g' : G, g * g' = one'
 ```
 
-I didn't need to specify the neutral element directly in the `Magma` structure,
+I didn't need to specify the neutral element,
 because the neutral is unique and preserved by substructures in groups.
-If I were writing about monoids, I would need something like a `PointedMagma`
+If I were writing about monoids, I would need to add a parameter like `neutral`
 because the neutral element isn't that well-behaved :
 
 ```lean
-structure PointedMagma where
-  carrier : Type
-  law : carrier → carrier → carrier
-  distinguished : carrier
+structure Monoid (M : Type) (law : M → M → M) (neutral : M) where [...]
 ```
 
-More generally, I think that it would be interesting to define the concrete type
-of algebraic structures not by the type of their carrier like in the Lean 3 mathlib,
-but by structures that reflect the language of the algebraic structures that we are
-studying.
+More generally, it looks appealing to me to move all the elements of the language of all
+algebraic structures out of the typeclasses.
 
 I think that (but I didn't actually test this idea at the time of writing) this
 approach works well with the formalization of category theory : for instance the type
 of the objects of the category `Grp` would be
-  `Σ (⟨ G, law ⟩ : Magma), Group ⟨ G, law ⟩`.
-My gut feeling is that this will behave well, but this is only _a priori_.
+  `Σ (G : Type) (law : G → G → G), Group G law`.
+My gut feeling is that this would behave well, but this is only _a priori_.
 
 ### Notation
 
@@ -97,6 +107,10 @@ local infixl:70 " * " => G.law -- (Actually there's a bit more to do, see below.
 
 end
 ```
+
+This has of course more actual value than enabling me to write fancy symbols.
+The idea is that it makes me able to talk uniformly about _multiplicative_ and _additive_ groups,
+unlike in mathlib where one has to define both `mul_group` and `add_group`.
 
 In the current state of the repo, there are some hard truths that come with this :
  * I actually use this only to denote my law by `*` (I also tested `+` at the
@@ -128,62 +142,18 @@ This didn't cause any trouble (for the moment), and as soon as the issue will be
 I'll just have to remove the extra `id` and the `appUnexpander`, and all will work
 Just Fine™.
 
-### Coercion
-
-I am very impressed that Lean survived what I have done to it with coercion.
-
-Joke aside, I have already used a lot of coercion in this repo.
-
-The first trick is to coerce `Magma` to carrier :
-```lean
-instance CoeCarrier (G : Magma) : CoeSort Magma Type where
-  coe m := m.carrier
-```
-
-As I have defined cosets (which I call `left classes` and `right classes` here,
-I hope this is not an inconvenience), I wanted to define the _type_ of cosets and
-to quantify over both them, and over the elements of any given class (coset).
-
-The types of left and right conjugation classes (is this what Bourbaki calls them ?)
-are defined as subtypes of `G → Prop`. I wanted to have a _type_ for left classes
-because my current goal is to define the quotient group as a group over the left
-classes (just like it's done in unergraduate degrees when embedding group theory
-in set theory).
-
-```lean
-variable {G : Magma} [Group G] (H : Subgroup G)
-
--- [...]
-
-def isLeftClass (p : G → Prop) := ∃ g, p = λ g' : G => ∃ h : H, g' = (g : G) * (h : G)
-def leftClass := Subtype (λ p : G → Prop => isLeftClass H p)
--- Right classes are symetrically defined
-```
-
-(By the way, I can't tell wether the `∃ g, p = …` trick is a hack or an actual
-good idea, and I'll welcome any argument for or against it.)
-
-With this definition, I can quantify over left classes : `∀ c : leftClass H, …`.
-
-Then, when I have a `leftClass`, I want to coerce it again to `Type` in order to
-quantify over its elements. Here is the definition I use to do that :
-```lean
-instance leftClassCoe (c : leftClass H) : CoeDep (leftClass H) c Type where
-  coe := Subtype c.val
-```
-
 ### Opposite groups
 
 I wanted to have opposite groups (which allow me to prove theorems only on left
 class and then to dualize to right classes).
 ```lean
-def op (G : Magma) [Group G] : Magma := ⟨ G, λ g₁ g₂ => G.law g₂ g₁ ⟩
-notation G "ᵒᵖ" => op G
+def op {G : Type} (law : G → G → G) [grp : Group G law] : G → G → G := λ g₁ g₂ => law g₂ g₁
+notation law "ᵒᵖ" => op law
 ```
 
-Writing this down both like cheating and owning mathematics, and I can't tell
-if this kind of trick is just a hack or would actually be relevant in matlib.
-This time again, any feedback is welcome !
+The problem I see with this is that I define `op` on the _law_ and not on the _group_.
+This makes mathematical sense, but it can also make it more difficult to work with groups
+because (as it happened when I was writing about groups) notations can easily become cumbersome.
 
 #### Fun with simp
 
@@ -205,8 +175,29 @@ in groups :
    reduce expressionc like `g * h * h⁻¹ * k` (wich is actually `((g * h) * h⁻¹) * k`
    because in the source `*` is define left-associative.
 
-## Conclusion / Postface / Afterthought
+## Results, as of now
 
-I hope that the Lean community will find some of the ideas that I discussed here
+The alternate way of working with algebraic objects I use in this repo looks promising
+enough, but I am not entierely convinced it is really suitable for matlib.
+
+If you skim through this repository, you'll see places where I had to hack with notations,
+and other places where I have to pass a lot of explicit parameters because of my design choices.
+
+I also guess that the fact that I use an approach to algebra that is very close to the set theoretic
+approach can lead me into definint objects that are inappropriate in a type theoretic framework.
+I'm searching for resources on how to work with algebra in type theory, and I'll update this
+repo when I'll find a promising approach.
+
+To make my approach to algebra actually pleasant to work with, I would have to play with the internals of
+Lean 4 to provide a better support for handling the objects I use here.
+
+I can't be sure for now that the way of working with algebraic objects that I use now
+is entierely relevant, but to be sure I guess I'll have to continue experimenting with
+more complex objects until I either find that it is simpler that the mathlib way or
+run into a dead end. I can't tell which of the two possibilities is the likeliest.
+
+Of course, any feedback is welcome.
+
+I still hope that the Lean community will find some of the ideas that I discussed here
 interesting. In other, more hopeful words, I would love to see this repo have
 a positive influence over the conversion effort for `mathlib 3 → mathlib 4`.
