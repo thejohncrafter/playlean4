@@ -27,7 +27,7 @@ local infix:70 " •ₗ " => leftTranslationOnSet law
 local notation:70 lhs:70 " •ᵣ " rhs:70 => rightTranslationOnSet law rhs lhs
 local infix:70 " ••  " => conjugationOnSet law
 
-instance leftActionOnSet : Action G law (leftTranslationOnSet law) := sorry
+instance leftActionOnSet : Action G law (leftTranslationOnSet law) := actionOnSet _ _
 
 theorem rightTranslationIdentity (P : Set G) : P •ᵣ one = P :=
 ((@actionOnSet G (lawᵒᵖ) _ _ (onSelf (lawᵒᵖ)) _).identity P)
